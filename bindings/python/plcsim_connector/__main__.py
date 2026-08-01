@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import sys
 
-from . import Area, PlcSimError, RuntimeManager, exchanges_io
+from . import Area, PlcSimError, RuntimeManager, describe_api_dll_search, exchanges_io
 
 
 def main() -> int:
+    print(describe_api_dll_search())
+
     try:
         runtime = RuntimeManager()
     except PlcSimError as exc:

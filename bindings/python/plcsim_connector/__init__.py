@@ -21,7 +21,7 @@ import functools
 import os
 import time
 import winreg
-from typing import Any, Callable, Iterator, Optional, Union
+from typing import Any, Callable, Iterator, List, Optional, Tuple, Union
 
 from ._core import (
     Area,
@@ -62,6 +62,32 @@ _DEFAULT_INSTALL_DIR = r"C:\Program Files (x86)\Common Files\Siemens\PLCSIMADV"
 _API_DLL_NAME = "Siemens.Simatic.Simulation.Runtime.Api.x64.dll"
 
 
+def _registry_install_path() -> Tuple[Optional[str], Optional[str]]:
+    """(install path, error) from the registry - exactly one is None."""
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            _REGISTRY_KEY,
+            0,
+            winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
+        ) as key:
+            install_path, _ = winreg.QueryValueEx(key, "Path")
+        return install_path, None
+    except OSError as exc:
+        return None, str(exc)
+
+
+def _candidate_api_dll_dirs() -> List[str]:
+    """Directories to check, in the same order InitializeApi() itself would
+    (registry install path, then the default install path)."""
+    install_path, _ = _registry_install_path()
+    candidates = []
+    if install_path:
+        candidates.append(os.path.join(install_path, "API", __api_version__))
+    candidates.append(os.path.join(_DEFAULT_INSTALL_DIR, "API", __api_version__))
+    return candidates
+
+
 @functools.lru_cache(maxsize=1)
 def _autodetect_api_dll_dir() -> Optional[str]:
     """Best-effort locate of the S7-PLCSIM Advanced API directory matching
@@ -76,24 +102,54 @@ def _autodetect_api_dll_dir() -> Optional[str]:
     if not __api_version__:
         return None
 
-    candidates = []
-    try:
-        with winreg.OpenKey(
-            winreg.HKEY_LOCAL_MACHINE,
-            _REGISTRY_KEY,
-            0,
-            winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
-        ) as key:
-            install_path, _ = winreg.QueryValueEx(key, "Path")
-            candidates.append(os.path.join(install_path, "API", __api_version__))
-    except OSError:
-        pass
-    candidates.append(os.path.join(_DEFAULT_INSTALL_DIR, "API", __api_version__))
-
-    for candidate in candidates:
+    for candidate in _candidate_api_dll_dirs():
         if os.path.isfile(os.path.join(candidate, _API_DLL_NAME)):
             return candidate
     return None
+
+
+def api_dll_dir() -> Optional[str]:
+    """The auto-detected S7-PLCSIM Advanced API DLL directory, or None if it
+    could not be found.
+
+    This is what :class:`RuntimeManager` uses by default when *api_dll_dir*
+    is not given explicitly.
+    """
+    return _autodetect_api_dll_dir()
+
+
+def describe_api_dll_search() -> str:
+    """Multi-line diagnostic report of the API DLL auto-detection: the API
+    version this package was built against, the registry lookup outcome, and
+    every candidate directory checked, with which one (if any) was found.
+
+    Print this - ``print(plcsim.describe_api_dll_search())`` - when
+    :class:`RuntimeManager` fails to find the SDK on a machine where
+    S7-PLCSIM Advanced is installed; it is also printed by
+    ``python -m plcsim_connector``.
+    """
+    lines = [f"built against S7-PLCSIM Advanced API version: {__api_version__ or '(unknown)'}"]
+    if not __api_version__:
+        lines.append("no API version baked into this build; auto-detection is disabled")
+        return "\n".join(lines)
+
+    install_path, error = _registry_install_path()
+    if install_path:
+        lines.append(f"registry install path ({_REGISTRY_KEY}): {install_path}")
+    else:
+        lines.append(f"registry lookup failed ({_REGISTRY_KEY}): {error}")
+
+    found = _autodetect_api_dll_dir()
+    for candidate in _candidate_api_dll_dirs():
+        marker = "FOUND" if candidate == found else "not found"
+        lines.append(f"  [{marker}] {os.path.join(candidate, _API_DLL_NAME)}")
+
+    if found is None:
+        lines.append(
+            "no candidate had the DLL; RuntimeManager() falls back to "
+            "InitializeApi()'s own search (app folder, then the same registry path)"
+        )
+    return "\n".join(lines)
 
 
 class RuntimeManager(_NativeRuntimeManager):
@@ -123,6 +179,9 @@ __all__ = [
     "RuntimeManager",
     "exchanges_io",
     "parse_bit_address",
+    # API DLL diagnostics
+    "api_dll_dir",
+    "describe_api_dll_search",
     # Exceptions
     "PlcSimError",
     "RetryableError",
@@ -132,6 +191,7 @@ __all__ = [
     "InstanceNotFoundError",
     "InstanceNotRunningError",
     "InvalidAddressError",
+    "NotConnectedError",
     "RuntimeManagerUnavailableError",
     "TimeoutError",
     # Reconnect helpers
@@ -139,6 +199,24 @@ __all__ = [
     "ReconnectingInstance",
     "__version__",
 ]
+
+
+class NotConnectedError(RetryableError):
+    """Raised by :class:`ReconnectingInstance`'s I/O calls when no instance is
+    currently attached and the non-blocking (re)attach attempt made for this
+    call did not produce one.
+
+    Purely a Python-side signal - unlike the other :class:`RetryableError`
+    subclasses, no native call produced it. It exists so a caller can write
+    a single ``except RetryableError`` around a simulation step and coast
+    through both "PLC not up yet" and "call failed, reconnect also failed"
+    without distinguishing them.
+    """
+
+    code = -1
+    code_name = "NotConnected"
+    kind = "NotConnected"
+    retryable = True
 
 
 def wait_for_instance(
@@ -194,16 +272,25 @@ class ReconnectingInstance:
     a bad address, an out-of-range offset - propagate untouched.
 
     Intended for long-running simulation loops (Webots controllers, HIL rigs)
-    that should survive a PLC restart without tearing down the whole
-    controller::
+    that should survive a PLC restart - or the PLC not being up yet at all -
+    without ever blocking the caller's loop::
 
         plc = plcsim.ReconnectingInstance("Webots")
         while robot.step(timestep) != -1:
-            plc.setAddressBit("%I10.2", sensor.getValue() > 500)
-            motor.setVelocity(5.0 if plc.getAddressBit("%Q4.1") else 0.0)
+            try:
+                plc.setAddressBit("%I10.2", sensor.getValue() > 500)
+                motor.setVelocity(5.0 if plc.getAddressBit("%Q4.1") else 0.0)
+            except plcsim.RetryableError:
+                motor.setVelocity(0.0)  # not connected (yet); coast this step
 
-    Reads return *stale* values while disconnected if ``default_on_failure`` is
-    set; by default the exception propagates once reconnection also fails.
+    Every I/O call (``setAddressBit``, ``getAddressBit``, ``run``, ``stop``,
+    ``operating_state``) makes at most one non-blocking attach attempt -
+    :meth:`RuntimeManager.try_attach` is a single cheap IPC round trip, the
+    same cost as a normal read/write, so no throttling is needed - and raises
+    :class:`NotConnectedError` (a :class:`RetryableError`) immediately if that
+    doesn't produce a live instance, rather than waiting around for one. Use
+    :meth:`connect` instead if you explicitly want to block until a
+    connection is ready, e.g. once at startup before entering the loop.
     """
 
     def __init__(
@@ -215,8 +302,14 @@ class ReconnectingInstance:
         on_reconnect: Optional[Callable[[Instance], None]] = None,
         api_dll_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> None:
-        """:param on_reconnect: called with each freshly attached instance -
-        the hook for re-asserting known input state after a PLC restart.
+        """:param connect_timeout: used only by :meth:`connect`, the explicit
+            blocking wait - how long to keep retrying before giving up. The
+            non-blocking I/O calls never use it; they make one attempt and
+            raise immediately.
+        :param poll_interval: used only by :meth:`connect`, the delay between
+            retries while blocking.
+        :param on_reconnect: called with each freshly attached instance -
+            the hook for re-asserting known input state after a PLC restart.
         :param api_dll_dir: forwarded to every :class:`RuntimeManager` this
             creates. Set this if the Siemens API DLL is not found by the
             default search order, e.g. a non-default S7-PLCSIM Advanced
@@ -241,7 +334,12 @@ class ReconnectingInstance:
         return self._instance is not None and self._instance.is_connected()
 
     def connect(self) -> Instance:
-        """Attach if not already attached. Idempotent."""
+        """Attach if not already attached, blocking until it succeeds or
+        ``connect_timeout`` expires. Idempotent.
+
+        For a simulation step loop, prefer the non-blocking I/O calls -
+        this is meant for a one-off wait at startup.
+        """
         if self._instance is not None and self._instance.is_connected():
             return self._instance
 
@@ -250,17 +348,42 @@ class ReconnectingInstance:
         # A dropped Runtime Manager invalidates the manager handle too, so
         # rebuild both rather than reusing a stale one.
         self._runtime = RuntimeManager(self._api_dll_dir)
-        self._instance = wait_for_instance(
+        instance = wait_for_instance(
             self._name,
             timeout=self._connect_timeout,
             poll_interval=self._poll_interval,
             runtime=self._runtime,
         )
+        self._attached(instance)
+        return instance
 
+    def poll_connect(self) -> bool:
+        """Non-blocking. Attach if not already attached.
+
+        Safe to call every simulation step: it makes at most one
+        :meth:`RuntimeManager.try_attach` attempt, which is a single cheap,
+        non-blocking IPC round trip - the same cost as a normal read/write -
+        and never sleeps or waits. Returns whether a connected instance is
+        available afterwards.
+        """
+        if self._instance is not None and self._instance.is_connected():
+            return True
+        self._drop()
+
+        if self._runtime is None:
+            self._runtime = RuntimeManager(self._api_dll_dir)
+
+        instance = self._runtime.try_attach(self._name)
+        if instance is None:
+            return False
+
+        self._attached(instance)
+        return True
+
+    def _attached(self, instance: Instance) -> None:
+        self._instance = instance
         if self._on_reconnect is not None:
-            self._on_reconnect(self._instance)
-
-        return self._instance
+            self._on_reconnect(instance)
 
     def close(self) -> None:
         self._drop()
@@ -272,14 +395,21 @@ class ReconnectingInstance:
         self._runtime = None
 
     def _call(self, method: str, *args: Any) -> Any:
-        instance = self.connect()
+        instance = self._require_connected()
         try:
             return getattr(instance, method)(*args)
         except RetryableError:
             # One reconnect, one retry. A second failure is real and propagates.
             self._drop()
-            instance = self.connect()
+            instance = self._require_connected()
             return getattr(instance, method)(*args)
+
+    def _require_connected(self) -> Instance:
+        """Non-blocking. Attach if possible, else raise immediately."""
+        if not self.poll_connect():
+            raise NotConnectedError(f"not connected to instance {self._name!r} yet")
+        assert self._instance is not None
+        return self._instance
 
     # -- I/O -------------------------------------------------------------
 
@@ -297,7 +427,7 @@ class ReconnectingInstance:
 
     @property
     def operating_state(self) -> OperatingState:
-        return self.connect().operating_state
+        return self._require_connected().operating_state
 
     def run(self) -> None:
         self._call("run")

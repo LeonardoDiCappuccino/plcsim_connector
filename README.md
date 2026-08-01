@@ -146,7 +146,9 @@ PlcSimError
     ├── InstanceNotFoundError            instance not registered (yet)
     ├── ConnectionLostError              interface dropped
     ├── TimeoutError
-    └── InstanceNotRunningError          not in RUN
+    ├── InstanceNotRunningError          not in RUN
+    └── NotConnectedError                ReconnectingInstance: not attached
+                                          yet, no native call was made
 ```
 
 Every exception carries `.kind`, `.code`, `.code_name` and `.retryable`. The C++
@@ -178,6 +180,14 @@ plc = plcsim.ReconnectingInstance("PLC_1", on_reconnect=reassert_inputs)
 non-retryable errors propagate untouched so a typo'd address cannot become an
 infinite loop. Use `on_reconnect` to re-assert input state, which the PLC loses
 across a restart.
+
+Every call is non-blocking: it makes at most one `try_attach()` attempt - a
+single cheap IPC round trip, no different in cost from a normal read/write -
+and raises `NotConnectedError` immediately if that doesn't produce a live
+instance, rather than waiting for one. Safe to call from inside a fixed-step
+simulation loop even before the Control Panel is up; it will never stall the
+loop. Call `connect()` instead if you specifically want to block, e.g. once
+at startup.
 
 ## Performance
 

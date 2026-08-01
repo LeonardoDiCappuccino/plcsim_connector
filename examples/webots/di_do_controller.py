@@ -13,7 +13,8 @@ Prerequisites
    into the interpreter Webots uses, or set PYTHONPATH to the build output:
        set PYTHONPATH=<repo>/build/msvc-x64-debug/python
 
-Uses ReconnectingInstance so restarting the PLC does not kill the controller.
+Uses ReconnectingInstance so restarting the PLC - or it not being up yet at
+all - does not kill or freeze the controller: every call is non-blocking.
 """
 
 from controller import Robot  # provided by Webots
@@ -55,9 +56,10 @@ def main() -> None:
 
     plc = plcsim.ReconnectingInstance(
         INSTANCE_NAME,
-        connect_timeout=None,      # wait indefinitely for the Control Panel
         on_reconnect=on_reconnect,
     )
+
+    was_connected = False
 
     while robot.step(timestep) != -1:
         try:
@@ -68,12 +70,18 @@ def main() -> None:
             motor.setVelocity(
                 MOTOR_VELOCITY if plc.getAddressBit(MOTOR_OUTPUT_BIT) else 0.0
             )
+            was_connected = True
 
         except plcsim.RetryableError as exc:
-            # Reconnection is handled inside ReconnectingInstance; reaching here
-            # means it failed twice. Coast this step and try again next one -
-            # do not let a PLC hiccup abort the simulation.
-            print(f"[plcsim] transient failure, coasting: {exc}")
+            # Covers both "not connected yet" (nothing registered) and "was
+            # connected but a call plus its one retry both failed". Neither
+            # call blocks, so this step just coasts and the next one tries
+            # again. Only log the transition so a PLC restart, or the
+            # Control Panel simply not being up yet, doesn't spam the
+            # console every step.
+            if was_connected:
+                print(f"[plcsim] lost connection, coasting: {exc}")
+            was_connected = False
             motor.setVelocity(0.0)
 
         except plcsim.PlcSimError as exc:

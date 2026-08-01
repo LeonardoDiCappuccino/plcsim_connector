@@ -124,7 +124,8 @@ std::string code_name_of(ERuntimeErrorCode code)
     return static_cast<int>(code) >= 0;
 }
 
-[[noreturn]] void throw_error(ERuntimeErrorCode code, const std::string& context)
+[[noreturn]] void throw_error(ERuntimeErrorCode code, const std::string& context,
+                               const std::string& extra = {})
 {
     std::string name = code_name_of(code);
     std::string message = context;
@@ -133,8 +134,75 @@ std::string code_name_of(ERuntimeErrorCode code)
     message += " (";
     message += std::to_string(static_cast<int>(code));
     message += ')';
+    if (!extra.empty()) {
+        message += " [";
+        message += extra;
+        message += ']';
+    }
 
     throw Error(classify(code), static_cast<int>(code), std::move(name), message);
+}
+
+// -- Win32 diagnostics for InitializeApi() failures --------------------------
+//
+// InitializeApi() is one opaque call into the Siemens DLL; there is nothing
+// of *ours* to log around it. The only genuinely new information available is
+// what Win32 already tracks and the SDK doesn't surface: GetLastError() right
+// after the call (set by LoadLibraryW/GetProcAddress if that's where it
+// actually failed), and an independent LoadLibraryW probe of the resolved DLL
+// path, which separates "the DLL itself won't load" (missing dependency,
+// architecture mismatch) from "it loads fine but the handshake with the
+// Runtime Manager fails" (licensing, permissions, a version skew the header
+// doesn't classify).
+
+constexpr const wchar_t* kApiDllName = L"Siemens.Simatic.Simulation.Runtime.Api.x64.dll";
+
+std::string win32_error_message(DWORD code)
+{
+    if (code == 0) {
+        return "0 (no error)";
+    }
+
+    LPWSTR buffer = nullptr;
+    const DWORD len = ::FormatMessageW(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
+
+    std::string text;
+    if (len > 0 && buffer != nullptr) {
+        text = to_utf8(buffer);
+        while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) {
+            text.pop_back();
+        }
+    }
+    if (buffer != nullptr) {
+        ::LocalFree(buffer);
+    }
+
+    return std::to_string(code) + (text.empty() ? " (unknown error)" : " (" + text + ")");
+}
+
+std::string probe_dll_load(const std::optional<std::filesystem::path>& dll_dir)
+{
+    if (!dll_dir.has_value()) {
+        return "api_dll_dir not given, probe skipped (InitializeApi() searches the app "
+               "folder, then the registry-reported install directory)";
+    }
+
+    const std::filesystem::path dll_path = *dll_dir / kApiDllName;
+
+    ::SetLastError(0);
+    HMODULE handle = ::LoadLibraryW(dll_path.c_str());
+    if (handle != nullptr) {
+        ::FreeLibrary(handle);
+        return "LoadLibraryW succeeded on " + dll_path.string() +
+               " (the DLL itself loads fine; the failure is inside InitializeApi()'s own "
+               "handshake with the Runtime Manager)";
+    }
+
+    const DWORD error = ::GetLastError();
+    return "LoadLibraryW(\"" + dll_path.string() + "\") failed: " + win32_error_message(error);
 }
 
 void check(ERuntimeErrorCode code, const std::string& context)
@@ -195,15 +263,20 @@ public:
             ISimulationRuntimeManager* manager = nullptr;
             ERuntimeErrorCode result = SREC_INVALID_ERROR_CODE;
 
+            ::SetLastError(0);
             if (dll_dir.has_value()) {
                 std::vector<WCHAR> path = to_wide(dll_dir->string());
                 result = ::InitializeApi(path.data(), &manager);
             } else {
                 result = ::InitializeApi(&manager);
             }
+            const DWORD last_error = ::GetLastError();
 
             if (!succeeded(result) || manager == nullptr) {
-                throw_error(result, "InitializeApi");
+                std::string diagnostics =
+                    "GetLastError() after InitializeApi(): " + win32_error_message(last_error);
+                diagnostics += "; direct LoadLibraryW probe: " + probe_dll_load(dll_dir);
+                throw_error(result, "InitializeApi", diagnostics);
             }
             g_api_manager = manager;
         }

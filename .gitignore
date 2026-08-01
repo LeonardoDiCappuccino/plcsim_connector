@@ -1,0 +1,25 @@
+# Build output
+/build/
+/install/
+/out/
+*.egg-info/
+__pycache__/
+*.pyc
+
+# ---------------------------------------------------------------------------
+# Siemens SDK artefacts must never be committed - they are proprietary and are
+# located from the local S7-PLCSIM Advanced installation at configure time.
+# ---------------------------------------------------------------------------
+SimulationRuntimeApi.h
+Siemens.Simatic.Simulation.Runtime.Api.*.dll
+
+# Editor / OS
+.vs/
+.idea/
+*.user
+Thumbs.db
+.DS_Store
+
+# CMake
+CMakeUserPresets.json
+compile_commands.json

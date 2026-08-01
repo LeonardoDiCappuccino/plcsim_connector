@@ -1,0 +1,100 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "PLCSIM_API_VERSION": "8.0"
+      }
+    },
+    {
+      "name": "msvc-x64-debug",
+      "displayName": "MSVC x64 Debug",
+      "description": "Debug build with tests, examples and the Python module",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PLCSIM_BUILD_TESTS": "ON",
+        "PLCSIM_BUILD_EXAMPLES": "ON",
+        "PLCSIM_BUILD_PYTHON": "ON"
+      }
+    },
+    {
+      "name": "msvc-x64-release",
+      "displayName": "MSVC x64 Release",
+      "description": "Optimised build, warnings are errors",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PLCSIM_BUILD_TESTS": "ON",
+        "PLCSIM_BUILD_EXAMPLES": "ON",
+        "PLCSIM_BUILD_PYTHON": "ON",
+        "PLCSIM_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "ninja-debug",
+      "displayName": "Ninja Debug (clangd-friendly)",
+      "description": "Single-config build producing a flat compile_commands.json",
+      "inherits": "base",
+      "generator": "Ninja",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "msvc-x64-debug",
+      "configurePreset": "msvc-x64-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "msvc-x64-release",
+      "configurePreset": "msvc-x64-release",
+      "configuration": "Release"
+    },
+    { "name": "ninja-debug", "configurePreset": "ninja-debug" }
+  ],
+  "testPresets": [
+    {
+      "name": "unit",
+      "displayName": "Unit tests (no PLCSIM required)",
+      "configurePreset": "msvc-x64-debug",
+      "configuration": "Debug",
+      "filter": { "include": { "name": "^unit\\." } },
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "live",
+      "displayName": "Live tests (needs a running instance)",
+      "configurePreset": "msvc-x64-debug",
+      "configuration": "Debug",
+      "filter": { "include": { "label": "live" } },
+      "output": { "outputOnFailure": true, "verbosity": "verbose" }
+    },
+    {
+      "name": "all",
+      "configurePreset": "msvc-x64-debug",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "dev",
+      "displayName": "Configure, build and unit-test",
+      "steps": [
+        { "type": "configure", "name": "msvc-x64-debug" },
+        { "type": "build", "name": "msvc-x64-debug" },
+        { "type": "test", "name": "unit" }
+      ]
+    }
+  ]
+}

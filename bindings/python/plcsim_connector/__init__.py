@@ -17,8 +17,11 @@ lifecycle.
 
 from __future__ import annotations
 
+import functools
+import os
 import time
-from typing import Any, Callable, Iterator, Optional
+import winreg
+from typing import Any, Callable, Iterator, Optional, Union
 
 from ._core import (
     Area,
@@ -26,10 +29,10 @@ from ._core import (
     Instance,
     InstanceInfo,
     OperatingState,
-    RuntimeManager,
     exchanges_io,
     parse_bit_address,
 )
+from ._core import RuntimeManager as _NativeRuntimeManager
 from ._core import (
     ApiNotInitializedError,
     ConnectionLostError,
@@ -42,7 +45,73 @@ from ._core import (
     RuntimeManagerUnavailableError,
     TimeoutError,
 )
-from ._core import __version__
+from ._core import __api_version__, __version__
+
+# -- API DLL directory auto-detection ----------------------------------------
+#
+# Mirrors cmake/FindPlcSimAdvancedApi.cmake's search: the registry install
+# path first, then the default installation directory. InitializeApi() does
+# its own search too (app folder, then this same registry path), but it stops
+# at the first folder where *a* same-named DLL exists - not the first
+# *correct* one - so a stale copy anywhere ahead of the real install (a
+# leftover from a previous version, a different app's bundled copy) causes an
+# unclassified failure instead of a clear one. Resolving the exact directory
+# ourselves and passing it explicitly sidesteps that.
+_REGISTRY_KEY = r"SOFTWARE\Wow6432Node\Siemens\Shared Tools\PLCSIMADV_SimRT"
+_DEFAULT_INSTALL_DIR = r"C:\Program Files (x86)\Common Files\Siemens\PLCSIMADV"
+_API_DLL_NAME = "Siemens.Simatic.Simulation.Runtime.Api.x64.dll"
+
+
+@functools.lru_cache(maxsize=1)
+def _autodetect_api_dll_dir() -> Optional[str]:
+    """Best-effort locate of the S7-PLCSIM Advanced API directory matching
+    the version this package was built against.
+
+    Returns None - leaving InitializeApi()'s own search to run - if no
+    directory holding the DLL can be found, so this is a strict improvement
+    over the default behaviour rather than a new way to fail. Cached for the
+    life of the process: it does one registry read and a couple of
+    filesystem checks, not one per connection attempt.
+    """
+    if not __api_version__:
+        return None
+
+    candidates = []
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_LOCAL_MACHINE,
+            _REGISTRY_KEY,
+            0,
+            winreg.KEY_READ | winreg.KEY_WOW64_32KEY,
+        ) as key:
+            install_path, _ = winreg.QueryValueEx(key, "Path")
+            candidates.append(os.path.join(install_path, "API", __api_version__))
+    except OSError:
+        pass
+    candidates.append(os.path.join(_DEFAULT_INSTALL_DIR, "API", __api_version__))
+
+    for candidate in candidates:
+        if os.path.isfile(os.path.join(candidate, _API_DLL_NAME)):
+            return candidate
+    return None
+
+
+class RuntimeManager(_NativeRuntimeManager):
+    """Connection to the S7-PLCSIM Advanced Runtime Manager.
+
+    Same as the native :class:`RuntimeManager`, except when *api_dll_dir* is
+    not given, it is auto-detected from the registry (see
+    :func:`_autodetect_api_dll_dir`) instead of being left to
+    ``InitializeApi()``'s own, less reliable, search.
+    """
+
+    def __init__(
+        self, api_dll_dir: Optional[Union[str, "os.PathLike[str]"]] = None
+    ) -> None:
+        if api_dll_dir is None:
+            api_dll_dir = _autodetect_api_dll_dir()
+        super().__init__(api_dll_dir)
+
 
 __all__ = [
     # Core types
@@ -78,6 +147,7 @@ def wait_for_instance(
     timeout: Optional[float] = 30.0,
     poll_interval: float = 0.5,
     runtime: Optional[RuntimeManager] = None,
+    api_dll_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
 ) -> Instance:
     """Block until an instance called *name* is registered, then attach to it.
 
@@ -88,6 +158,9 @@ def wait_for_instance(
     spinning.
 
     :param timeout: seconds to keep trying, or ``None`` to wait forever.
+    :param api_dll_dir: forwarded to :class:`RuntimeManager` when *runtime* is
+        not given. Set this if the Siemens API DLL is not found by the
+        default search order, e.g. a non-default S7-PLCSIM Advanced install.
     :raises InstanceNotFoundError: if the timeout expires.
     """
     deadline = None if timeout is None else time.monotonic() + timeout
@@ -95,7 +168,7 @@ def wait_for_instance(
 
     while True:
         try:
-            rt = runtime if runtime is not None else RuntimeManager()
+            rt = runtime if runtime is not None else RuntimeManager(api_dll_dir)
             instance = rt.try_attach(name)
             if instance is not None:
                 return instance
@@ -140,14 +213,20 @@ class ReconnectingInstance:
         connect_timeout: Optional[float] = 30.0,
         poll_interval: float = 0.5,
         on_reconnect: Optional[Callable[[Instance], None]] = None,
+        api_dll_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> None:
         """:param on_reconnect: called with each freshly attached instance -
         the hook for re-asserting known input state after a PLC restart.
+        :param api_dll_dir: forwarded to every :class:`RuntimeManager` this
+            creates. Set this if the Siemens API DLL is not found by the
+            default search order, e.g. a non-default S7-PLCSIM Advanced
+            install.
         """
         self._name = name
         self._connect_timeout = connect_timeout
         self._poll_interval = poll_interval
         self._on_reconnect = on_reconnect
+        self._api_dll_dir = api_dll_dir
         self._runtime: Optional[RuntimeManager] = None
         self._instance: Optional[Instance] = None
 
@@ -170,7 +249,7 @@ class ReconnectingInstance:
 
         # A dropped Runtime Manager invalidates the manager handle too, so
         # rebuild both rather than reusing a stale one.
-        self._runtime = RuntimeManager()
+        self._runtime = RuntimeManager(self._api_dll_dir)
         self._instance = wait_for_instance(
             self._name,
             timeout=self._connect_timeout,

@@ -25,7 +25,8 @@ set_target_properties(plcsim_python_core PROPERTIES
 target_link_libraries(plcsim_python_core PRIVATE plcsim::core)
 
 target_compile_definitions(plcsim_python_core PRIVATE
-    PLCSIM_CONNECTOR_VERSION="${PROJECT_VERSION}")
+    PLCSIM_CONNECTOR_VERSION="${PROJECT_VERSION}"
+    PLCSIM_API_VERSION="${PLCSIM_API_VERSION}")
 
 # Mirror the pure-Python sources into the build tree so the extension and the
 # package that wraps it always travel together.

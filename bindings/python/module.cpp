@@ -92,6 +92,10 @@ PYBIND11_MODULE(_core, m)
 {
     m.doc() = "Native bindings for the S7-PLCSIM Advanced digital I/O connector.";
     m.attr("__version__") = PLCSIM_CONNECTOR_VERSION;
+    // The API subdirectory ("8.0", ...) this extension was built against, so
+    // the pure-Python layer can auto-locate the matching DLL at runtime
+    // instead of relying solely on InitializeApi()'s own search order.
+    m.attr("__api_version__") = PLCSIM_API_VERSION;
 
     // -- Exceptions ---------------------------------------------------------
     g_exceptions.base = py::register_exception<Error>(m, "PlcSimError").release();

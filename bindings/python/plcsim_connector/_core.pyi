@@ -5,6 +5,7 @@ import os
 from typing import List, Optional
 
 __version__: str
+__api_version__: str
 
 class Area(enum.Enum):
     Input: int

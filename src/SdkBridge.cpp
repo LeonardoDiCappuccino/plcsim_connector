@@ -205,6 +205,32 @@ std::string probe_dll_load(const std::optional<std::filesystem::path>& dll_dir)
     return "LoadLibraryW(\"" + dll_path.string() + "\") failed: " + win32_error_message(error);
 }
 
+/// Whether *this* process is running elevated (as Administrator).
+///
+/// A non-elevated caller cannot see - and cannot cleanly join the singleton
+/// lock of - a Runtime Manager that was started elevated (e.g. required for
+/// S7-PLCSIM Advanced's TCP/IP single adapter / OPC UA mode): Windows'
+/// Mandatory Integrity Control blocks a lower-integrity process from opening
+/// a higher-integrity one's mutex/named pipe. InitializeApi() then tries to
+/// spawn a redundant Runtime Manager, which immediately conflicts with the
+/// real one and exits - producing exactly the unclassified failure this
+/// diagnostic exists to explain.
+[[nodiscard]] bool is_process_elevated() noexcept
+{
+    HANDLE token = nullptr;
+    if (!::OpenProcessToken(::GetCurrentProcess(), TOKEN_QUERY, &token)) {
+        return false;
+    }
+
+    TOKEN_ELEVATION elevation{};
+    DWORD size = 0;
+    const bool ok =
+        ::GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &size) != 0;
+    ::CloseHandle(token);
+
+    return ok && elevation.TokenIsElevated != 0;
+}
+
 void check(ERuntimeErrorCode code, const std::string& context)
 {
     if (!succeeded(code)) {
@@ -276,6 +302,12 @@ public:
                 std::string diagnostics =
                     "GetLastError() after InitializeApi(): " + win32_error_message(last_error);
                 diagnostics += "; direct LoadLibraryW probe: " + probe_dll_load(dll_dir);
+                diagnostics += "; this process elevated: ";
+                diagnostics += is_process_elevated() ? "yes" : "no";
+                diagnostics +=
+                    " (a non-elevated caller cannot reach a Runtime Manager that was started "
+                    "elevated - e.g. required for TCP/IP single adapter / OPC UA mode - match "
+                    "elevation on both sides)";
                 throw_error(result, "InitializeApi", diagnostics);
             }
             g_api_manager = manager;

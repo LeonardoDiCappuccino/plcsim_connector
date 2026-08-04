@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(plcsim_connector
-    VERSION 0.1.0
+    VERSION 1.0.0
     DESCRIPTION "C++/Python connector for SIMATIC S7-PLCSIM Advanced digital I/O"
     LANGUAGES CXX)
 

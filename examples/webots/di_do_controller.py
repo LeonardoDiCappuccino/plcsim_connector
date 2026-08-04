@@ -59,7 +59,10 @@ def main() -> None:
         on_reconnect=on_reconnect,
     )
 
-    was_connected = False
+    # Try to Initialize connection every 2s if not there
+    while not plc.poll_connect():
+        print(f"plcsim_connector: Trying to connect to {INSTANCE_NAME}")
+        robot.step(2000)
 
     while robot.step(timestep) != -1:
         try:
@@ -70,23 +73,12 @@ def main() -> None:
             motor.setVelocity(
                 MOTOR_VELOCITY if plc.getAddressBit(MOTOR_OUTPUT_BIT) else 0.0
             )
-            was_connected = True
 
         except plcsim.RetryableError as exc:
-            # Covers both "not connected yet" (nothing registered) and "was
-            # connected but a call plus its one retry both failed". Neither
-            # call blocks, so this step just coasts and the next one tries
-            # again. Only log the transition so a PLC restart, or the
-            # Control Panel simply not being up yet, doesn't spam the
-            # console every step.
-            if was_connected:
-                print(f"[plcsim] lost connection, coasting: {exc}")
-            was_connected = False
+            print(f"[plcsim] lost connection, coasting: {exc}")
             motor.setVelocity(0.0)
 
         except plcsim.PlcSimError as exc:
-            # Non-retryable: a bad address or an out-of-range offset. That is a
-            # bug in this controller, so fail loudly rather than spinning.
             print(f"[plcsim] fatal: {exc} (kind={exc.kind}, code={exc.code_name})")
             raise
 

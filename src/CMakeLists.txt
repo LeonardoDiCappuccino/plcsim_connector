@@ -8,6 +8,7 @@ find_package(PlcSimAdvancedApi REQUIRED)
 #     without S7-PLCSIM Advanced installed. tests/ links these directly.
 #   * SdkBridge.cpp - the sole consumer of SimulationRuntimeApi.h.
 # ---------------------------------------------------------------------------
+
 set(PLCSIM_PURE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Address.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Error.cpp"
@@ -25,8 +26,6 @@ target_include_directories(plcsim_core
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-# PRIVATE: the Siemens header is an implementation detail. Consumers of
-# plcsim_core get our headers only - no Windows.h, no SimulationRuntimeApi.h.
 target_link_libraries(plcsim_core PRIVATE PlcSimAdvanced::Api)
 
 target_compile_features(plcsim_core PUBLIC cxx_std_20)

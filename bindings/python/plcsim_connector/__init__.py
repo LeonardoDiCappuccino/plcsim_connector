@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import os
+import sys
 import time
 import winreg
 from typing import Any, Callable, Iterator, List, Optional, Tuple, Union
@@ -59,7 +60,14 @@ from ._core import __api_version__, __version__
 # ourselves and passing it explicitly sidesteps that.
 _REGISTRY_KEY = r"SOFTWARE\Wow6432Node\Siemens\Shared Tools\PLCSIMADV_SimRT"
 _DEFAULT_INSTALL_DIR = r"C:\Program Files (x86)\Common Files\Siemens\PLCSIMADV"
-_API_DLL_NAME = "Siemens.Simatic.Simulation.Runtime.Api.x64.dll"
+# The DLL name must match this interpreter's bitness, not the machine's: a
+# 32-bit Python loads the 32-bit extension module, which can only load the
+# x86 API DLL, even on a 64-bit Windows install.
+_API_DLL_NAME = (
+    "Siemens.Simatic.Simulation.Runtime.Api.x64.dll"
+    if sys.maxsize > 2**32
+    else "Siemens.Simatic.Simulation.Runtime.Api.x86.dll"
+)
 
 
 def _registry_install_path() -> Tuple[Optional[str], Optional[str]]:

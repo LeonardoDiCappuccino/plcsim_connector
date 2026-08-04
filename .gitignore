@@ -7,20 +7,23 @@
 __pycache__/
 *.pyc
 
-# ---------------------------------------------------------------------------
-# Siemens SDK artefacts must never be committed - they are proprietary and are
-# located from the local S7-PLCSIM Advanced installation at configure time.
-# ---------------------------------------------------------------------------
+# Siemens SDK artifacts must never be committed (defense-in-depth)
 SimulationRuntimeApi.h
 Siemens.Simatic.Simulation.Runtime.Api.*.dll
 
 # Editor / OS
-.vs/
-.idea/
+/.vs/
+/.vscode/
+/.idea/
+/.claude/
 *.user
 Thumbs.db
 .DS_Store
+.clang-format
 
 # CMake
 CMakeUserPresets.json
 compile_commands.json
+
+# docs
+docs/s7-plcsim_advanced_function_manual_API_en-US.pdf

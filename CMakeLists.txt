@@ -24,36 +24,25 @@ if(NOT MSVC)
         "with virtual functions, which are only ABI-compatible with MSVC.")
 endif()
 
-if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-    message(FATAL_ERROR
-        "plcsim_connector requires a 64-bit build so that the x64 Siemens runtime DLL is loaded. "
-        "Configure with an x64 generator/preset (e.g. -A x64).")
-endif()
-
-# ---------------------------------------------------------------------------
 # Options
-# ---------------------------------------------------------------------------
 option(PLCSIM_BUILD_PYTHON   "Build the Python extension module" ON)
 option(PLCSIM_BUILD_TESTS    "Build the C++ test suite"          ON)
 option(PLCSIM_BUILD_EXAMPLES "Build the C++ examples"            ON)
 option(PLCSIM_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
-# ---------------------------------------------------------------------------
 # Global settings
-# ---------------------------------------------------------------------------
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Lets VS Code's C/C++ and clangd extensions resolve includes without guessing.
+# Lets editors resolve includes without guessing
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(NOT DEFINED CMAKE_RUNTIME_OUTPUT_DIRECTORY)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()
 
-# /Zc:__cplusplus makes MSVC report a truthful __cplusplus; /permissive- and
-# /EHsc keep the code honest and exceptions working across the pybind11 boundary.
+# Exceptions working across the pybind11 boundary
 add_compile_options($<$<COMPILE_LANGUAGE:CXX>:/Zc:__cplusplus> /permissive- /EHsc /utf-8)
 
 add_subdirectory(src)
@@ -72,9 +61,7 @@ if(PLCSIM_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# ---------------------------------------------------------------------------
-# Install / package config
-# ---------------------------------------------------------------------------
+# Make installable / consumable by other CMake projects
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 

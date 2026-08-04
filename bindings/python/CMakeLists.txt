@@ -1,7 +1,6 @@
 find_package(Python 3.9 REQUIRED COMPONENTS Interpreter Development.Module)
 
-# Prefer an already-available pybind11 (pip install pybind11, vcpkg, conda)
-# and fall back to a one-time download.
+# Prefer an already-available pybind11
 include(FetchContent)
 FetchContent_Declare(pybind11
     GIT_REPOSITORY https://github.com/pybind/pybind11.git
@@ -15,11 +14,6 @@ pybind11_add_module(plcsim_python_core MODULE module.cpp)
 set_target_properties(plcsim_python_core PROPERTIES
     OUTPUT_NAME _core
     # Land next to the pure-Python package so the build tree is importable
-    # as-is: `set PYTHONPATH=<build>/python` and `import plcsim_connector`.
-    #
-    # The trailing "$<0:>" is the documented way to stop multi-config
-    # generators appending a per-config subdirectory; without it the .pyd
-    # lands in .../plcsim_connector/Debug/ where Python will not find it.
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/python/plcsim_connector/$<0:>")
 
 target_link_libraries(plcsim_python_core PRIVATE plcsim::core)
@@ -28,8 +22,7 @@ target_compile_definitions(plcsim_python_core PRIVATE
     PLCSIM_CONNECTOR_VERSION="${PROJECT_VERSION}"
     PLCSIM_API_VERSION="${PLCSIM_API_VERSION}")
 
-# Mirror the pure-Python sources into the build tree so the extension and the
-# package that wraps it always travel together.
+# Mirror the pure-Python sources into the build tree
 set(_plcsim_py_files
     plcsim_connector/__init__.py
     plcsim_connector/__main__.py

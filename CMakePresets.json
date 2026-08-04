@@ -6,7 +6,6 @@
       "name": "base",
       "hidden": true,
       "generator": "Visual Studio 17 2022",
-      "architecture": "x64",
       "binaryDir": "${sourceDir}/build/${presetName}",
       "installDir": "${sourceDir}/install/${presetName}",
       "cacheVariables": {
@@ -19,6 +18,7 @@
       "displayName": "MSVC x64 Debug",
       "description": "Debug build with tests, examples and the Python module",
       "inherits": "base",
+      "architecture": "x64",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "PLCSIM_BUILD_TESTS": "ON",
@@ -31,6 +31,34 @@
       "displayName": "MSVC x64 Release",
       "description": "Optimised build, warnings are errors",
       "inherits": "base",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PLCSIM_BUILD_TESTS": "ON",
+        "PLCSIM_BUILD_EXAMPLES": "ON",
+        "PLCSIM_BUILD_PYTHON": "ON",
+        "PLCSIM_WARNINGS_AS_ERRORS": "ON"
+      }
+    },
+    {
+      "name": "msvc-x86-debug",
+      "displayName": "MSVC x86 Debug",
+      "description": "Debug build with tests, examples and the Python module, targeting 32-bit",
+      "inherits": "base",
+      "architecture": "Win32",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PLCSIM_BUILD_TESTS": "ON",
+        "PLCSIM_BUILD_EXAMPLES": "ON",
+        "PLCSIM_BUILD_PYTHON": "ON"
+      }
+    },
+    {
+      "name": "msvc-x86-release",
+      "displayName": "MSVC x86 Release",
+      "description": "Optimised build, warnings are errors, targeting 32-bit",
+      "inherits": "base",
+      "architecture": "Win32",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "PLCSIM_BUILD_TESTS": "ON",
@@ -60,6 +88,16 @@
       "configurePreset": "msvc-x64-release",
       "configuration": "Release"
     },
+    {
+      "name": "msvc-x86-debug",
+      "configurePreset": "msvc-x86-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "msvc-x86-release",
+      "configurePreset": "msvc-x86-release",
+      "configuration": "Release"
+    },
     { "name": "ninja-debug", "configurePreset": "ninja-debug" }
   ],
   "testPresets": [
@@ -84,6 +122,28 @@
       "configurePreset": "msvc-x64-debug",
       "configuration": "Debug",
       "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "unit-x86",
+      "displayName": "Unit tests, 32-bit (no PLCSIM required)",
+      "configurePreset": "msvc-x86-debug",
+      "configuration": "Debug",
+      "filter": { "include": { "name": "^unit\\." } },
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "live-x86",
+      "displayName": "Live tests, 32-bit (needs a running instance)",
+      "configurePreset": "msvc-x86-debug",
+      "configuration": "Debug",
+      "filter": { "include": { "label": "live" } },
+      "output": { "outputOnFailure": true, "verbosity": "verbose" }
+    },
+    {
+      "name": "all-x86",
+      "configurePreset": "msvc-x86-debug",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
     }
   ],
   "workflowPresets": [
@@ -94,6 +154,15 @@
         { "type": "configure", "name": "msvc-x64-debug" },
         { "type": "build", "name": "msvc-x64-debug" },
         { "type": "test", "name": "unit" }
+      ]
+    },
+    {
+      "name": "dev-x86",
+      "displayName": "Configure, build and unit-test, 32-bit",
+      "steps": [
+        { "type": "configure", "name": "msvc-x86-debug" },
+        { "type": "build", "name": "msvc-x86-debug" },
+        { "type": "test", "name": "unit-x86" }
       ]
     }
   ]

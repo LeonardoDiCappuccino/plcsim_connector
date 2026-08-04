@@ -29,9 +29,10 @@ namespace plcsim {
 class RuntimeManager {
 public:
     /// @param api_dll_dir Directory holding
-    ///        Siemens.Simatic.Simulation.Runtime.Api.x64.dll. Leave empty to
-    ///        let the SDK resolve it: application directory first, then the
-    ///        install path recorded in the registry.
+    ///        Siemens.Simatic.Simulation.Runtime.Api.x64.dll (or the .x86.dll
+    ///        variant, for a 32-bit build). Leave empty to let the SDK resolve
+    ///        it: application directory first, then the install path recorded
+    ///        in the registry.
     ///
     /// Throws Error(ErrorKind::ApiNotInitialized) if the DLL cannot be loaded,
     /// or Error(ErrorKind::RuntimeManagerUnavailable) if no Runtime Manager is

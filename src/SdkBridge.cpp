@@ -155,7 +155,13 @@ std::string code_name_of(ERuntimeErrorCode code)
 // Runtime Manager fails" (licensing, permissions, a version skew the header
 // doesn't classify).
 
+// Mirrors the #ifdef _M_X64 branch inside InitializeApi() itself, so the probe
+// checks for the same file the SDK actually tries to load.
+#ifdef _M_X64
 constexpr const wchar_t* kApiDllName = L"Siemens.Simatic.Simulation.Runtime.Api.x64.dll";
+#else
+constexpr const wchar_t* kApiDllName = L"Siemens.Simatic.Simulation.Runtime.Api.x86.dll";
+#endif
 
 std::string win32_error_message(DWORD code)
 {

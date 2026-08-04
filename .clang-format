@@ -1,18 +1,6 @@
----
 Language: Cpp
 BasedOnStyle: Google
 IndentWidth: 4
 ColumnLimit: 100
 AccessModifierOffset: -4
 AllowShortFunctionsOnASingleLine: Inline
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterFunction: true
-  AfterClass: false
-  AfterControlStatement: false
-  AfterNamespace: false
-  AfterStruct: false
-DerivePointerAlignment: false
-PointerAlignment: Left
-IncludeBlocks: Preserve
-SortIncludes: CaseSensitive

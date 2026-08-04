@@ -12,10 +12,9 @@ SimulationRuntimeApi.h
 Siemens.Simatic.Simulation.Runtime.Api.*.dll
 
 # Editor / OS
-/.vs/
-/.vscode/
-/.idea/
-/.claude/
+.vs/
+.idea/
+.claude/
 *.user
 Thumbs.db
 .DS_Store

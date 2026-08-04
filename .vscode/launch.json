@@ -1,0 +1,81 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "C++: debug unit tests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/msvc-x64-debug/bin/Debug/plcsim_unit_tests.exe",
+      "args": ["--break"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "CMake: build (debug)"
+    },
+    {
+      "name": "C++: debug live tests",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/msvc-x64-debug/bin/Debug/plcsim_live_tests.exe",
+      "args": ["[live]", "--instance", "${input:instanceName}", "--break"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "CMake: build (debug)"
+    },
+    {
+      "name": "C++: debug the DI/DO example",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/msvc-x64-debug/bin/Debug/di_do_demo.exe",
+      "args": ["${input:instanceName}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "CMake: build (debug)"
+    },
+    {
+      "name": "Python: current file",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/build/msvc-x64-debug/python"
+      }
+    },
+    {
+      "name": "Python: list registered instances",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "plcsim_connector",
+      "console": "integratedTerminal",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/build/msvc-x64-debug/python"
+      },
+      "preLaunchTask": "CMake: build (debug)"
+    },
+    {
+      // Attach the native debugger to a running Python process to step from
+      // Python straight into the C++ binding. Start the Python config first,
+      // then launch this one and pick the process.
+      "name": "C++: attach to a Python process",
+      "type": "cppvsdbg",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Python + native debugging",
+      "configurations": ["Python: current file", "C++: attach to a Python process"],
+      "stopAll": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "instanceName",
+      "type": "promptString",
+      "description": "Name of the registered PLCSIM Advanced instance",
+      "default": "Webots"
+    }
+  ]
+}

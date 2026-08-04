@@ -23,7 +23,8 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "PLCSIM_BUILD_TESTS": "ON",
         "PLCSIM_BUILD_EXAMPLES": "ON",
-        "PLCSIM_BUILD_PYTHON": "ON"
+        "PLCSIM_BUILD_PYTHON": "ON",
+        "PLCSIM_LIVE_INSTANCE": "Connector_Tests"
       }
     },
     {
@@ -50,7 +51,8 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "PLCSIM_BUILD_TESTS": "ON",
         "PLCSIM_BUILD_EXAMPLES": "ON",
-        "PLCSIM_BUILD_PYTHON": "ON"
+        "PLCSIM_BUILD_PYTHON": "ON",
+        "PLCSIM_LIVE_INSTANCE": "Connector_Tests"
       }
     },
     {

@@ -5,10 +5,11 @@ at driving digital I/O from a simulation environment such as Webots.
 
 Python users can skip the C++ toolchain entirely: grab the prebuilt wheel from
 [GitHub Releases](https://github.com/LeonardoDiCappuccino/plcsim_connector/releases)
-instead of building from source:
+instead of building from source. Install for your python version (cp313 -> 3.13):
 
 ```bash
-pip install https://github.com/LeonardoDiCappuccino/plcsim_connector/releases/download/v1.0.0/plcsim_connector-1.0.0-cp313-cp313-win_amd64.whl
+pip install https::w
+//github.com/LeonardoDiCappuccino/plcsim_connector/releases/download/v1.0.0/plcsim_connector-1.0.0-cp313-cp313-win_amd64.whl
 ```
 
 (the exact filename depends on your Python version — pick the matching `.whl`
